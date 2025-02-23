@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "automessage",
   "version": "1.0.0",
-  "name": "Auto Message Mod",
+  "name": "ProgrammableChat",
   "description": "A mod that allows players to set a message or command to be sent automatically at a specified interval.",
   "authors": [
     "AsagiriBeta"
