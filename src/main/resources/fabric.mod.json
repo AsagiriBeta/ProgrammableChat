@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "automessage",
+  "version": "1.0.0",
+  "name": "Auto Message Mod",
+  "description": "A mod that allows players to set a message or command to be sent automatically at a specified interval.",
+  "authors": [
+    "AsagiriBeta"
+  ],
+  "contact": {
+    "homepage": "https://example.com",
+    "sources": "https://github.com/example/automessage"
+  },
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "AsagiriBeta.programmablechat.client.ModEntryPoint"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.14.0",
+    "fabric-api": ">=0.115.1+1.21.1",
+    "minecraft": "1.21.1"
+  }
+}
