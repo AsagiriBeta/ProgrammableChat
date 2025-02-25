@@ -3,7 +3,11 @@ package AsagiriBeta.programmablechat.client;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
 public class AutoMessageMod implements ModInitializer {
@@ -31,6 +35,15 @@ public class AutoMessageMod implements ModInitializer {
                 }
             }
         });
+
+        // 修改UI初始化逻辑，将按钮添加到选项界面
+        ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+            if (screen instanceof net.minecraft.client.gui.screen.option.OptionsScreen) {
+                Screens.getButtons(screen).add(ButtonWidget.builder(Text.of("ProgrammableChat"), button -> {
+                    MinecraftClient.getInstance().setScreen(new AutoMessageScreen());
+                }).dimensions(10, scaledHeight - 30, 150, 20).build());
+            }
+        });
     }
 
     public static void setMessage(String msg) {
@@ -47,5 +60,9 @@ public class AutoMessageMod implements ModInitializer {
 
     public static void stopSending() {
         isSending = false;
+    }
+
+    public static boolean isSending() {
+        return isSending;
     }
 }
