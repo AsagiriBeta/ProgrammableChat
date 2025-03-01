@@ -10,48 +10,33 @@ import org.lwjgl.glfw.GLFW;
 public class AutoMessageScreen extends Screen {
     private TextFieldWidget messageField;
     private TextFieldWidget intervalField;
-    private ButtonWidget startStopButton;
-    private ButtonWidget autoEatButton; // 新增自动进食按钮
-    private String savedMessage = "";
-    private String savedInterval = "";
+    private final String savedMessage;
+    private final String savedInterval;
 
     protected AutoMessageScreen() {
         super(Text.of("Auto Message Settings"));
+        savedMessage = AutoMessageMod.getMessage();
+        savedInterval = String.valueOf(AutoMessageMod.getInterval());
     }
 
     @Override
     protected void init() {
         // 初始化消息输入框
         this.messageField = new TextFieldWidget(this.textRenderer, this.width / 2 - 100, this.height / 2 - 50, 200, 20, Text.of("消息/指令："));
-        this.messageField.setMaxLength(256); // 设置最大输入长度
-        this.messageField.setText(savedMessage); // 恢复之前保存的消息
+        this.messageField.setMaxLength(256);
+        this.messageField.setText(savedMessage);
 
         // 初始化间隔输入框
         this.intervalField = new TextFieldWidget(this.textRenderer, this.width / 2 - 100, this.height / 2 - 20, 200, 20, Text.of("间隔时间（秒）："));
-        this.intervalField.setMaxLength(10); // 设置最大输入长度
-        this.intervalField.setText(savedInterval); // 恢复之前保存的间隔
+        this.intervalField.setMaxLength(10);
+        this.intervalField.setText(savedInterval);
 
         // 添加输入框到界面
         this.addSelectableChild(this.messageField);
         this.addSelectableChild(this.intervalField);
 
-        // 添加保存按钮
-        this.addDrawableChild(ButtonWidget.builder(Text.of("保存间隔发送设置"), button -> {
-            String intervalText = this.intervalField.getText();
-            int interval = intervalText.isEmpty() ? 0 : Integer.parseInt(intervalText);
-            if (interval <= 0) {
-                // 可以在这里添加提示用户输入有效间隔的逻辑
-                interval = 10; // 默认值
-            }
-            AutoMessageMod.setMessage(this.messageField.getText());
-            AutoMessageMod.setInterval(interval);
-            savedMessage = this.messageField.getText(); // 保存当前消息
-            savedInterval = this.intervalField.getText(); // 保存当前间隔
-            this.close();
-        }).dimensions(this.width / 2 - 100, this.height / 2 + 10, 200, 20).build());
-
         // 添加Start/Stop按钮
-        this.startStopButton = ButtonWidget.builder(Text.of(AutoMessageMod.isSending() ? "间隔发送已打开" : "打开间隔发送"), button -> {
+        ButtonWidget startStopButton = ButtonWidget.builder(Text.of(AutoMessageMod.isSending() ? "间隔发送已打开" : "打开间隔发送"), button -> {
             if (AutoMessageMod.isSending()) {
                 AutoMessageMod.stopSending();
                 button.setMessage(Text.of("打开间隔发送"));
@@ -60,10 +45,10 @@ public class AutoMessageScreen extends Screen {
                 button.setMessage(Text.of("间隔发送已打开"));
             }
         }).dimensions(this.width / 2 - 100, this.height / 2 + 40, 200, 20).build();
-        this.addDrawableChild(this.startStopButton);
+        this.addDrawableChild(startStopButton);
 
         // 添加自动进食按钮
-        this.autoEatButton = ButtonWidget.builder(Text.of(AutoMessageMod.isAutoEating() ? "自动进食已打开" : "打开自动进食"), button -> {
+        ButtonWidget autoEatButton = ButtonWidget.builder(Text.of(AutoMessageMod.isAutoEating() ? "自动进食已打开" : "打开自动进食"), button -> {
             if (AutoMessageMod.isAutoEating()) {
                 AutoMessageMod.setAutoEating(false);
                 button.setMessage(Text.of("打开自动进食"));
@@ -72,7 +57,7 @@ public class AutoMessageScreen extends Screen {
                 button.setMessage(Text.of("自动进食已打开"));
             }
         }).dimensions(this.width / 2 - 100, this.height / 2 + 70, 200, 20).build();
-        this.addDrawableChild(this.autoEatButton);
+        this.addDrawableChild(autoEatButton);
     }
 
     @Override
@@ -100,6 +85,14 @@ public class AutoMessageScreen extends Screen {
         // 渲染输入框
         this.messageField.render(context, mouseX, mouseY, delta);
         this.intervalField.render(context, mouseX, mouseY, delta);
+    }
+
+    @Override
+    public void close() {
+        // 保存设置到JSON文件
+        AutoMessageMod.setMessage(this.messageField.getText());
+        AutoMessageMod.setInterval(Integer.parseInt(this.intervalField.getText()));
+        super.close();
     }
 
     @Override
