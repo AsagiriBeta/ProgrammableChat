@@ -32,6 +32,11 @@ public class AutoMessageCommand {
                     AutoMessageMod.stopSending();
                     return 1;
                 }))
+            .then(ClientCommandManager.literal("autobuild")
+                .executes(context -> {
+                    AutoMessageMod.setAutoBuilding(!AutoMessageMod.isAutoBuilding());
+                    return 1;
+                }))
         );
     }
 }
