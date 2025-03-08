@@ -35,16 +35,16 @@ public class AutoMessageMod implements ModInitializer {
     private static Vec3d lastPlayerPos = Vec3d.ZERO;
     private static boolean hasUpdatedPosition = false;
     private static long eatStartTime = 0;
-    private static long lastGotoTime = 0; // 新增：记录上次发送#goto的时间
-    private static boolean hasOpenedChest = false; // 新增：记录是否已经打开过箱子
-    private static int chestOpenAttempts = 0; // 新增：记录尝试打开箱子的次数
-    private static long lastChestOpenAttemptTime = 0; // 新增：记录上次尝试打开箱子的时间
-    private static int currentSlotIndex = 0; // 新增：记录当前处理的槽位索引
+    private static long lastGotoTime = 0;
+    private static boolean hasOpenedChest = false;
+    private static int chestOpenAttempts = 0;
+    private static long lastChestOpenAttemptTime = 0;
+    private static boolean hasSentLitematica = false; // 新增：用于判断是否已经发送过 #litematica 指令
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = Paths.get("config", "programmablechat.json");
 
     public static String getCoordinate() {
-        return coordinate; // 修改：返回实际的坐标值
+        return coordinate;
     }
 
     @Override
@@ -70,7 +70,7 @@ public class AutoMessageMod implements ModInitializer {
             }
 
             // 自动建造逻辑
-            if (isAutoBuilding) {
+            if (isAutoBuilding && mc.player != null) {
                 Vec3d currentPos = mc.player.getPos();
                 if (coordinate != null && !coordinate.isEmpty()) {
                     String[] parts = coordinate.split(" ");
@@ -101,51 +101,61 @@ public class AutoMessageMod implements ModInitializer {
                                         }
                                         chestOpenAttempts++;
                                         lastChestOpenAttemptTime = System.currentTimeMillis();
-                                        hasOpenedChest = true; // 设置箱子已打开
+                                        hasOpenedChest = true;
                                     }
-                                } else {
-                                    // 在箱子打开后立即开始进行物品转移，但转移过程慢一点
-                                    if (mc.player.currentScreenHandler != null && mc.interactionManager != null) {
+                                }
+                                
+                                // 独立的 if 语句，确保在箱子打开后执行拿取物品的逻辑
+                                if (mc.player.currentScreenHandler != null && mc.interactionManager != null) {
+                                    // 增加延迟，确保箱子完全打开
+                                    if (System.currentTimeMillis() - lastChestOpenAttemptTime >= 1000) { // 延迟增加到1000毫秒
+                                        // 在箱子打开后开始进行物品转移
                                         // 定义每次转移的间隔时间（例如100毫秒）
                                         long transferInterval = 100;
                                         // 计算当前可以转移的物品槽位
                                         if (System.currentTimeMillis() - lastChestOpenAttemptTime >= transferInterval) {
-                                            // 获取箱子的槽位数量
-                                            int chestSlotCount = 54; // 直接定义为54，确保所有槽位都被尝试
-                                            // 获取玩家背包的槽位数量
-                                            int playerInventorySlotCount = 27; // 玩家背包有3行9列，共27个槽位
-                                            if (currentSlotIndex < chestSlotCount) {
-                                                // 确保物品被正确移动到玩家背包
-                                                int chestSlotIndex = 36 + currentSlotIndex; // 箱子的槽位从36开始
-                                                var chestStack = mc.player.currentScreenHandler.getSlot(chestSlotIndex).getStack();
-                                                if (!chestStack.isEmpty()) {
-                                                    // 找到玩家背包中的第一个空槽位
-                                                    int playerSlotIndex = currentSlotIndex % playerInventorySlotCount;
-                                                    // 尝试将物品从箱子移动到玩家背包
-                                                    mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, chestSlotIndex, 0, SlotActionType.PICKUP, mc.player);
-                                                    mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, playerSlotIndex, 0, SlotActionType.PICKUP, mc.player);
+                                            // 获取箱子的槽位数量，固定为27个槽位
+                                            int chestSlotCount = 27; // 固定为27个槽位
+
+                                            // 按照箱子槽位顺序将物品转移到背包的对应槽位
+                                            for (int chestSlotIndex = 0; chestSlotIndex < chestSlotCount; chestSlotIndex++) {
+                                                // 检查槽位索引是否在有效范围内
+                                                if (chestSlotIndex < mc.player.currentScreenHandler.slots.size()) {
+                                                    var chestStack = mc.player.currentScreenHandler.getSlot(chestSlotIndex).getStack();
+                                                    if (!chestStack.isEmpty()) {
+                                                        // 计算对应的背包槽位，从54开始
+                                                        int playerSlotIndex = 54 + chestSlotIndex; // 从背包的第54个槽位开始
+                                                        // 检查背包槽位索引是否在有效范围内
+                                                        if (playerSlotIndex < mc.player.currentScreenHandler.slots.size()) {
+                                                            // 模拟左键点击箱子槽位，再左键点击背包槽位，将物品转移到背包
+                                                            mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, chestSlotIndex, 0, SlotActionType.PICKUP, mc.player);
+                                                            mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, playerSlotIndex, 0, SlotActionType.PICKUP, mc.player);
+                                                        }
+                                                    }
                                                 }
-                                                currentSlotIndex++;
-                                            } else {
-                                                // 关闭箱子
-                                                mc.player.closeHandledScreen();
-                                                hasOpenedChest = false; // 重置箱子打开状态
-                                                chestOpenAttempts = 0; // 重置尝试次数
-                                                currentSlotIndex = 0; // 重置槽位索引
-                                                // 在关闭箱子后发送#litematica
-                                                mc.player.networkHandler.sendChatMessage("#litematica");
-                                                // 强制离开箱子交互范围，避免再次打开
-                                                mc.player.setPosition(targetX, targetY, targetZ + 2);
-                                                return; // 添加return语句，确保关闭箱子后不会再次打开
                                             }
+
+                                            // 转移完成后关闭箱子界面并发送 #litematica 指令
+                                            if (mc.player != null) {
+                                                mc.player.closeHandledScreen();
+                                                if (!hasSentLitematica) { // 使用独立的 hasSentLitematica 判断
+                                                    mc.player.networkHandler.sendChatMessage("#litematica");
+                                                    hasSentLitematica = true; // 标记为已发送
+                                                }
+                                            }
+                                            // 设置为已打开箱子
+                                            hasOpenedChest = true;
+                                            chestOpenAttempts = 0;
+                                            lastChestOpenAttemptTime = System.currentTimeMillis();
+                                            return; // 确保退出循环，防止程序再次尝试打开箱子
                                         }
                                     }
                                 }
-                            } else {
-                                // 如果差值超过1，则重置箱子打开状态
-                                hasOpenedChest = false; // 重置箱子打开状态
-                                chestOpenAttempts = 0; // 重置尝试次数
-                                currentSlotIndex = 0; // 重置槽位索引
+                            } else if (deltaX > 2.0 || deltaZ > 2.0) {
+                                // 如果差值超过2，则重置箱子打开状态
+                                hasOpenedChest = false;
+                                chestOpenAttempts = 0;
+                                hasSentLitematica = false; // 重置 hasSentLitematica 状态
                             }
 
                             // 检测玩家是否保持不动半分钟
@@ -167,7 +177,7 @@ public class AutoMessageMod implements ModInitializer {
             }
 
             // 自动进食逻辑
-            if (isAutoEating) {
+            if (isAutoEating && mc.player != null) {
                 if (mc.currentScreen != null) {
                     return;
                 }
