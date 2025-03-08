@@ -111,32 +111,22 @@ public class AutoMessageMod implements ModInitializer {
                                         // 计算当前可以转移的物品槽位
                                         if (System.currentTimeMillis() - lastChestOpenAttemptTime >= transferInterval) {
                                             // 获取箱子的槽位数量
-                                            int chestSlotCount = mc.player.currentScreenHandler.slots.size() - 9; // 获取箱子的槽位数量
+                                            int chestSlotCount = 54; // 直接定义为54，确保所有槽位都被尝试
                                             // 获取玩家背包的槽位数量
                                             int playerInventorySlotCount = 27; // 玩家背包有3行9列，共27个槽位
-                                            if (currentSlotIndex < chestSlotCount && currentSlotIndex < playerInventorySlotCount) {
+                                            if (currentSlotIndex < chestSlotCount) {
                                                 // 确保物品被正确移动到玩家背包
-                                                int chestSlotIndex = 9 + currentSlotIndex;
-                                                int playerSlotIndex = currentSlotIndex;
-                                                // 尝试将物品从箱子移动到玩家背包
-                                                mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, chestSlotIndex, 0, SlotActionType.PICKUP, mc.player);
-                                                mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, playerSlotIndex, 0, SlotActionType.PICKUP, mc.player);
+                                                int chestSlotIndex = 36 + currentSlotIndex; // 箱子的槽位从36开始
+                                                var chestStack = mc.player.currentScreenHandler.getSlot(chestSlotIndex).getStack();
+                                                if (!chestStack.isEmpty()) {
+                                                    // 找到玩家背包中的第一个空槽位
+                                                    int playerSlotIndex = currentSlotIndex % playerInventorySlotCount;
+                                                    // 尝试将物品从箱子移动到玩家背包
+                                                    mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, chestSlotIndex, 0, SlotActionType.PICKUP, mc.player);
+                                                    mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, playerSlotIndex, 0, SlotActionType.PICKUP, mc.player);
+                                                }
                                                 currentSlotIndex++;
                                             } else {
-                                                // 所有物品都已转移，将背包中的物品尽可能放到物品栏的空栏位
-                                                for (int i = 0; i < 9; i++) {
-                                                    var stack = mc.player.getInventory().getStack(i);
-                                                    if (stack.isEmpty()) {
-                                                        for (int j = 27; j < 36; j++) {
-                                                            var stackInHotbar = mc.player.getInventory().getStack(j);
-                                                            if (!stackInHotbar.isEmpty()) {
-                                                                mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, j, 0, SlotActionType.PICKUP, mc.player);
-                                                                mc.interactionManager.clickSlot(mc.player.currentScreenHandler.syncId, i, 0, SlotActionType.PICKUP, mc.player);
-                                                                break;
-                                                            }
-                                                        }
-                                                    }
-                                                }
                                                 // 关闭箱子
                                                 mc.player.closeHandledScreen();
                                                 hasOpenedChest = false; // 重置箱子打开状态
