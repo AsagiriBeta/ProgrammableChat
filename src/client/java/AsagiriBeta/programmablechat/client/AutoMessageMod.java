@@ -39,7 +39,8 @@ public class AutoMessageMod implements ModInitializer {
     private static boolean hasOpenedChest = false;
     private static int chestOpenAttempts = 0;
     private static long lastChestOpenAttemptTime = 0;
-    private static boolean hasSentLitematica = false; // 新增：用于判断是否已经发送过 #litematica 指令
+    private static boolean hasSentLitematica = false;
+    private static String tempCoordinate = ""; // 新增：临时记录坐标
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = Paths.get("config", "programmablechat.json");
 
@@ -58,6 +59,8 @@ public class AutoMessageMod implements ModInitializer {
                 return;
             }
 
+            Vec3d currentPos = mc.player.getPos();
+
             if (isSending && interval > 0 && System.currentTimeMillis() - lastSentTime >= interval * 1000L) {
                 if (!message.isEmpty()) {
                     if (message.startsWith("/")) {
@@ -70,8 +73,10 @@ public class AutoMessageMod implements ModInitializer {
             }
 
             // 自动建造逻辑
-            if (isAutoBuilding && mc.player != null) {
-                Vec3d currentPos = mc.player.getPos();
+            if (isAutoBuilding) {
+                if (mc.player == null) {
+                    return;
+                }
                 if (coordinate != null && !coordinate.isEmpty()) {
                     String[] parts = coordinate.split(" ");
                     if (parts.length == 3) {
@@ -86,16 +91,48 @@ public class AutoMessageMod implements ModInitializer {
                             double deltaY = Math.abs(currentPos.y - targetPos.y);
                             double deltaZ = Math.abs(currentPos.z - targetPos.z);
 
+                            // 判断玩家是否在预设坐标2格范围外
+                            if (deltaX > 2.0 || deltaY > 2.0 || deltaZ > 2.0) {
+                                // 再判断玩家是否保持不动20秒
+                                if (currentPos.equals(lastPlayerPos)) {
+                                    if (System.currentTimeMillis() - lastPlayerMoveTime >= 20000 && lastGotoTime == 0) {
+                                        // 记录当前玩家坐标
+                                        tempCoordinate = String.format("%.1f %.1f %.1f", currentPos.x, currentPos.y, currentPos.z);
+                                        // 发送 #goto 预设坐标
+                                        mc.player.networkHandler.sendChatMessage("#goto " + coordinate);
+                                        lastGotoTime = System.currentTimeMillis(); // 记录发送时间
+                                    }
+                                } else {
+                                    lastPlayerMoveTime = System.currentTimeMillis();
+                                    lastPlayerPos = currentPos;
+                                }
+                            } else if (deltaX <= 2.0 && deltaY <= 2.0 && deltaZ <= 2.0) {
+                                // 判断玩家是否在预设坐标2格范围内保持不动超过10秒钟
+                                if (currentPos.equals(lastPlayerPos)) {
+                                    if (System.currentTimeMillis() - lastPlayerMoveTime >= 10000 && lastGotoTime == 0) {
+                                        // 发送 #goto 临时坐标
+                                        mc.player.networkHandler.sendChatMessage("#goto " + tempCoordinate);
+                                        lastGotoTime = System.currentTimeMillis(); // 记录发送时间
+                                    }
+                                } else {
+                                    lastPlayerMoveTime = System.currentTimeMillis();
+                                    lastPlayerPos = currentPos;
+                                }
+                            }
+
+                            // 如果发送 #goto 之后，过了40秒发送一次 #litematica
+                            if (lastGotoTime != 0 && System.currentTimeMillis() - lastGotoTime >= 40000 && !hasSentLitematica) {
+                                mc.player.networkHandler.sendChatMessage("#litematica");
+                                hasSentLitematica = true; // 标记已发送
+                                lastGotoTime = 0; // 重置时间，避免重复发送
+                            }
+
                             // 如果x和z差值不超过1，y差值不超过1，则尝试与箱子交互
                             if (deltaX <= 1.0 && deltaY <= 1.0 && deltaZ <= 1.0) {
-                                // 如果差值小于等于1且未打开过箱子，则尝试与箱子交互
                                 if (!hasOpenedChest) {
                                     if (System.currentTimeMillis() - lastChestOpenAttemptTime >= 500 && chestOpenAttempts < 1) {
-                                        // 获取箱子的位置（预设坐标的x, y-1, z）
                                         BlockPos chestPos = new BlockPos((int) targetX, (int) targetY - 1, (int) targetZ);
-                                        // 创建BlockHitResult来模拟与箱子的交互
                                         BlockHitResult hitResult = new BlockHitResult(new Vec3d(chestPos.getX() + 0.5, chestPos.getY() + 0.5, chestPos.getZ() + 0.5), Direction.UP, chestPos, false);
-                                        // 模拟与箱子的交互
                                         if (mc.interactionManager != null) {
                                             mc.interactionManager.interactBlock(mc.player, net.minecraft.util.Hand.MAIN_HAND, hitResult);
                                         }
@@ -135,13 +172,12 @@ public class AutoMessageMod implements ModInitializer {
                                                 }
                                             }
 
-                                            // 转移完成后关闭箱子界面并发送 #litematica 指令
+                                            // 转移完成后关闭箱子界面并发送 #goto 临时坐标
                                             if (mc.player != null) {
-                                                mc.player.closeHandledScreen();
-                                                if (!hasSentLitematica) { // 使用独立的 hasSentLitematica 判断
-                                                    mc.player.networkHandler.sendChatMessage("#litematica");
-                                                    hasSentLitematica = true; // 标记为已发送
-                                                }
+                                                // 明确关闭箱子界面
+                                                mc.player.closeHandledScreen(); // 关闭箱子界面
+                                                mc.player.networkHandler.sendChatMessage("#goto " + tempCoordinate); // 发送 #goto 临时坐标
+                                                lastGotoTime = System.currentTimeMillis(); // 记录发送时间
                                             }
                                             // 设置为已打开箱子
                                             hasOpenedChest = true;
@@ -156,57 +192,48 @@ public class AutoMessageMod implements ModInitializer {
                                 hasOpenedChest = false;
                                 chestOpenAttempts = 0;
                                 hasSentLitematica = false; // 重置 hasSentLitematica 状态
-                            }
-
-                            // 检测玩家是否保持不动半分钟
-                            if (currentPos.equals(lastPlayerPos)) {
-                                if (System.currentTimeMillis() - lastPlayerMoveTime >= 30000 && System.currentTimeMillis() - lastGotoTime >= 30000) {
-                                    mc.player.networkHandler.sendChatMessage("#goto " + coordinate);
-                                    lastGotoTime = System.currentTimeMillis();
-                                }
-                            } else {
-                                lastPlayerMoveTime = System.currentTimeMillis();
-                                lastPlayerPos = currentPos;
+                                lastGotoTime = 0; // 重置 lastGotoTime
                             }
 
                         } catch (NumberFormatException e) {
-                            // 坐标格式错误，忽略
+                            System.out.println("坐标格式错误: " + e.getMessage());
                         }
                     }
                 }
             }
 
             // 自动进食逻辑
-            if (isAutoEating && mc.player != null) {
+            if (isAutoEating) {
                 if (mc.currentScreen != null) {
                     return;
                 }
 
-                Vec3d currentPos = mc.player.getPos();
                 if (!hasUpdatedPosition) {
                     lastPlayerPos = currentPos;
                     hasUpdatedPosition = true;
                 }
                 if (!currentPos.equals(lastPlayerPos)) {
-                    int foodLevel = mc.player.getHungerManager().getFoodLevel();
-                    if (foodLevel <= 10) {
-                        if (eatStartTime == 0) {
-                            for (int i = 0; i < 9; i++) {
-                                var stack = mc.player.getInventory().getStack(i);
-                                if (stack.getItem() == Items.COOKED_PORKCHOP) {
-                                    mc.player.getInventory().selectedSlot = i;
-                                    mc.options.useKey.setPressed(true);
-                                    eatStartTime = System.currentTimeMillis();
-                                    break;
+                    if (mc.player != null && mc.player.getHungerManager() != null) { // 增加空值检查
+                        int foodLevel = mc.player.getHungerManager().getFoodLevel();
+                        if (foodLevel <= 10) {
+                            if (eatStartTime == 0) {
+                                for (int i = 0; i < 9; i++) {
+                                    var stack = mc.player.getInventory().getStack(i);
+                                    if (stack.getItem() == Items.COOKED_PORKCHOP) {
+                                        mc.player.getInventory().selectedSlot = i;
+                                        mc.options.useKey.setPressed(true);
+                                        eatStartTime = System.currentTimeMillis();
+                                        break;
+                                    }
                                 }
+                            } else if (System.currentTimeMillis() - eatStartTime >= 6000) {
+                                mc.options.useKey.setPressed(false);
+                                eatStartTime = 0;
                             }
-                        } else if (System.currentTimeMillis() - eatStartTime >= 6000) {
+                        } else if (foodLevel >= 20) {
                             mc.options.useKey.setPressed(false);
                             eatStartTime = 0;
                         }
-                    } else if (foodLevel >= 20) {
-                        mc.options.useKey.setPressed(false);
-                        eatStartTime = 0;
                     }
                 }
             }
@@ -298,7 +325,7 @@ public class AutoMessageMod implements ModInitializer {
                 isAutoEating = config.isAutoEating;
                 isAutoBuilding = config.isAutoBuilding;
             } catch (IOException e) {
-                net.minecraft.util.Util.throwOrPause(e);
+                System.out.println("加载配置文件失败: " + e.getMessage());
             }
         }
     }
@@ -308,7 +335,7 @@ public class AutoMessageMod implements ModInitializer {
         try (FileWriter writer = new FileWriter(CONFIG_PATH.toFile())) {
             GSON.toJson(config, writer);
         } catch (IOException e) {
-            net.minecraft.util.Util.throwOrPause(e);
+            System.out.println("保存配置文件失败: " + e.getMessage());
         }
     }
 

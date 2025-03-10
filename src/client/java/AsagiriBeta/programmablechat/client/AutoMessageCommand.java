@@ -37,6 +37,7 @@ public class AutoMessageCommand {
                     AutoMessageMod.setAutoBuilding(!AutoMessageMod.isAutoBuilding());
                     return 1;
                 }))
+
         );
     }
 }
