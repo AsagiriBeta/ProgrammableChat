@@ -1,3 +1,5 @@
 配合baritone模组使用
 补货地址设置箱子上方一格坐标
 命令设置#allowinventory true
+命令设置#acceptableThrowawayItems可添加平滑石
+可适当调大#maxCostIncrease和#exploreChunkSetMinimumSize
