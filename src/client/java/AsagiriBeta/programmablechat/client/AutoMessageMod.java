@@ -41,6 +41,7 @@ public class AutoMessageMod implements ModInitializer {
     private static long lastChestOpenAttemptTime = 0;
     private static String tempCoordinate = ""; // 新增：临时记录坐标
     private static long lastLitematicaTime = 0; // 新增：独立的 #litematica 指令计时变量
+    private static String searchText = ""; // 新增：用于存储搜索框的临时字符信息
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = Paths.get("config", "programmablechat.json");
 
@@ -270,6 +271,16 @@ public class AutoMessageMod implements ModInitializer {
                     .dimensions(10, scaledHeight - 30, 150, 20).build());
             }
         });
+
+        // 创建 restp 文件夹
+        Path restpPath = Paths.get("restp");
+        if (!Files.exists(restpPath)) {
+            try {
+                Files.createDirectory(restpPath);
+            } catch (IOException e) {
+                System.out.println("创建 restp 文件夹失败: " + e.getMessage());
+            }
+        }
     }
 
     public static void setMessage(String msg) {
@@ -334,6 +345,15 @@ public class AutoMessageMod implements ModInitializer {
         return isAutoBuilding;
     }
 
+    public static String getSearchText() {
+        return searchText;
+    }
+
+    public static void setSearchText(String text) {
+        searchText = text;
+        saveConfig();
+    }
+
     private static void loadConfig() {
         if (Files.exists(CONFIG_PATH)) {
             try (FileReader reader = new FileReader(CONFIG_PATH.toFile())) {
@@ -344,6 +364,7 @@ public class AutoMessageMod implements ModInitializer {
                 isSending = config.isSending;
                 isAutoEating = config.isAutoEating;
                 isAutoBuilding = config.isAutoBuilding;
+                searchText = config.searchText; // 新增：加载搜索框的临时字符信息
             } catch (IOException e) {
                 System.out.println("加载配置文件失败: " + e.getMessage());
             }
@@ -351,7 +372,7 @@ public class AutoMessageMod implements ModInitializer {
     }
 
     private static void saveConfig() {
-        Config config = new Config(message, interval, coordinate, isSending, isAutoEating, isAutoBuilding);
+        Config config = new Config(message, interval, coordinate, isSending, isAutoEating, isAutoBuilding, searchText); // 新增：保存搜索框的临时字符信息
         try (FileWriter writer = new FileWriter(CONFIG_PATH.toFile())) {
             GSON.toJson(config, writer);
         } catch (IOException e) {
@@ -366,14 +387,16 @@ public class AutoMessageMod implements ModInitializer {
         boolean isSending;
         boolean isAutoEating;
         boolean isAutoBuilding;
+        String searchText; // 新增：用于存储搜索框的临时字符信息
 
-        Config(String message, int interval, String coordinate, boolean isSending, boolean isAutoEating, boolean isAutoBuilding) {
+        Config(String message, int interval, String coordinate, boolean isSending, boolean isAutoEating, boolean isAutoBuilding, String searchText) {
             this.message = message;
             this.interval = interval;
             this.coordinate = coordinate;
             this.isSending = isSending;
             this.isAutoEating = isAutoEating;
             this.isAutoBuilding = isAutoBuilding;
+            this.searchText = searchText; // 新增：初始化搜索框的临时字符信息
         }
     }
 
