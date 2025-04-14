@@ -23,15 +23,9 @@ import com.google.gson.reflect.TypeToken;
 import net.minecraft.client.MinecraftClient;
 
 public class AutoMessageScreen extends Screen {
-    private final String savedMessage;
-    private final String savedInterval;
-    private final String savedCoordinate;
 
     protected AutoMessageScreen() {
         super(Text.of("Auto Message Settings"));
-        savedMessage = AutoMessageMod.getMessage();
-        savedInterval = String.valueOf(AutoMessageMod.getInterval());
-        savedCoordinate = AutoMessageMod.getCoordinate();
     }
 
     @Override
@@ -87,7 +81,7 @@ public class AutoMessageScreen extends Screen {
 
     @Override
     public void close() {
-        super.close();
+        super.close(); // 只保留父类默认行为
     }
 
     @Override
@@ -104,7 +98,7 @@ public class AutoMessageScreen extends Screen {
         return super.charTyped(chr, modifiers);
     }
 
-    private class IntervalSettingsScreen extends Screen {
+    private static class IntervalSettingsScreen extends Screen {
         private TextFieldWidget messageField;
         private TextFieldWidget intervalField;
 
@@ -114,10 +108,11 @@ public class AutoMessageScreen extends Screen {
 
         @Override
         protected void init() {
-            // 添加返回按钮
+            // 修改返回按钮逻辑
             ButtonWidget backButton = ButtonWidget.builder(Text.of("← 返回"), button -> {
+                saveSettings(); // 保存设置
                 if (this.client != null) {
-                    this.client.setScreen(AutoMessageScreen.this);
+                    this.client.setScreen(new AutoMessageScreen()); // 返回主菜单
                 }
             }).dimensions(10, 10, 60, 20).build();
             this.addDrawableChild(backButton);
@@ -125,19 +120,34 @@ public class AutoMessageScreen extends Screen {
             // 初始化消息输入框
             this.messageField = new TextFieldWidget(this.textRenderer, this.width / 2 - 100, this.height / 2 - 50, 200, 20, Text.of("消息/指令："));
             this.messageField.setMaxLength(256);
-            this.messageField.setText(savedMessage);
+            this.messageField.setText(AutoMessageMod.getMessage()); // 实时获取最新消息
+            this.messageField.setChangedListener(text -> {
+                AutoMessageMod.setMessage(text);
+                AutoMessageMod.saveConfig(); // 实时保存
+            });
 
             // 初始化间隔输入框
             this.intervalField = new TextFieldWidget(this.textRenderer, this.width / 2 - 100, this.height / 2 - 20, 200, 20, Text.of("间隔时间（秒）："));
             this.intervalField.setMaxLength(10);
-            this.intervalField.setText(savedInterval);
+            this.intervalField.setText(String.valueOf(AutoMessageMod.getInterval())); // 实时获取最新间隔
+            this.intervalField.setTextPredicate(text -> {
+                if (text.matches("\\d*")) { // 只允许数字输入
+                    if (!text.isEmpty()) {
+                        AutoMessageMod.setInterval(Integer.parseInt(text));
+                        AutoMessageMod.saveConfig(); // 实时保存
+                    }
+                    return true;
+                }
+                return false;
+            });
 
             // 添加输入框到界面
             this.addSelectableChild(this.messageField);
             this.addSelectableChild(this.intervalField);
 
-            // 添加Start/Stop按钮
+            // 修改Start/Stop按钮的保存逻辑
             ButtonWidget startStopButton = ButtonWidget.builder(Text.of(AutoMessageMod.isSending() ? "间隔发送已打开" : "打开间隔发送"), button -> {
+                saveSettings(); // 新增：按下按钮时保存设置
                 if (AutoMessageMod.isSending()) {
                     AutoMessageMod.stopSending();
                     button.setMessage(Text.of("打开间隔发送"));
@@ -165,15 +175,30 @@ public class AutoMessageScreen extends Screen {
 
         @Override
         public void close() {
-            // 保存设置到JSON文件
-            AutoMessageMod.setMessage(this.messageField.getText());
-            AutoMessageMod.setInterval(Integer.parseInt(this.intervalField.getText()));
+            this.messageField.setFocused(false);
+            this.intervalField.setFocused(false);
+            saveSettings();
+            AutoMessageMod.saveConfig(); // 异步保存配置
             super.close();
+        }
+
+        // 新增：保存设置的方法
+        private void saveSettings() {
+            String message = this.messageField.getText();
+            int interval = 0;
+            try {
+                interval = Integer.parseInt(this.intervalField.getText());
+            } catch (NumberFormatException e) {
+                System.out.println("间隔时间格式错误: " + e.getMessage());
+            }
+            AutoMessageMod.setMessage(message);
+            AutoMessageMod.setInterval(interval);
         }
 
         @Override
         public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                saveSettings(); // 新增：按下 ESC 键时保存设置
                 this.close();
                 return true;
             }
@@ -190,7 +215,7 @@ public class AutoMessageScreen extends Screen {
         }
     }
 
-    private class AutoBuildSettingsScreen extends Screen {
+    private static class AutoBuildSettingsScreen extends Screen {
         private TextFieldWidget coordinateField;
 
         protected AutoBuildSettingsScreen() {
@@ -199,10 +224,11 @@ public class AutoMessageScreen extends Screen {
 
         @Override
         protected void init() {
-            // 添加返回按钮
+            // 修改返回按钮逻辑
             ButtonWidget backButton = ButtonWidget.builder(Text.of("← 返回"), button -> {
+                saveCoordinate(); // 保存坐标
                 if (this.client != null) {
-                    this.client.setScreen(AutoMessageScreen.this);
+                    this.client.setScreen(new AutoMessageScreen()); // 返回主菜单
                 }
             }).dimensions(10, 10, 60, 20).build();
             this.addDrawableChild(backButton);
@@ -210,13 +236,19 @@ public class AutoMessageScreen extends Screen {
             // 初始化坐标输入框
             this.coordinateField = new TextFieldWidget(this.textRenderer, this.width / 2 - 100, this.height / 2 - 50, 200, 20, Text.of("补货坐标（x y z）："));
             this.coordinateField.setMaxLength(50);
-            this.coordinateField.setText(savedCoordinate);
+            this.coordinateField.setText(AutoMessageMod.getCoordinate()); // 实时获取最新坐标
+            this.coordinateField.setChangedListener(text -> {
+                String coord = text.trim().replaceAll("\\s+", " "); // 标准化空格
+                AutoMessageMod.setCoordinate(coord);
+                AutoMessageMod.saveConfig(); // 实时保存
+            });
 
             // 添加输入框到界面
             this.addSelectableChild(this.coordinateField);
 
-            // 添加自动建造按钮
+            // 修改自动建造按钮的保存逻辑
             ButtonWidget autoBuildButton = ButtonWidget.builder(Text.of(AutoMessageMod.isAutoBuilding() ? "自动建造已打开" : "打开自动建造"), button -> {
+                saveCoordinate(); // 新增：按下按钮时保存坐标
                 if (AutoMessageMod.isAutoBuilding()) {
                     AutoMessageMod.setAutoBuilding(false);
                     button.setMessage(Text.of("打开自动建造"));
@@ -226,6 +258,13 @@ public class AutoMessageScreen extends Screen {
                 }
             }).dimensions(this.width / 2 - 100, this.height / 2 - 20, 200, 20).build();
             this.addDrawableChild(autoBuildButton);
+        }
+
+        // 新增：保存坐标的方法
+        private void saveCoordinate() {
+            String coord = this.coordinateField.getText().trim().replaceAll("\\s+", " ");
+            AutoMessageMod.setCoordinate(coord);
+            AutoMessageMod.saveConfig();
         }
 
         @Override
@@ -242,15 +281,16 @@ public class AutoMessageScreen extends Screen {
 
         @Override
         public void close() {
-            // 保存坐标值，确保格式为x y z
-            String coord = this.coordinateField.getText().trim().replaceAll("\\s+", " ");
-            AutoMessageMod.setCoordinate(coord);
+            this.coordinateField.setFocused(false);
+            saveCoordinate();
+            AutoMessageMod.saveConfig(); // 异步保存配置
             super.close();
         }
 
         @Override
         public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
+                saveCoordinate(); // 新增：按下 ESC 键时保存坐标
                 this.close();
                 return true;
             }
@@ -268,22 +308,23 @@ public class AutoMessageScreen extends Screen {
     private class TeleportPointsScreen extends Screen {
         private List<TeleportPoint> teleportPoints = new ArrayList<>();
         private final List<TeleportPoint> filteredTeleportPoints = new ArrayList<>();
-        private int scrollOffset = 0; // 新增：滚动偏移量
-        private static final int ITEMS_PER_PAGE = 5; // 每页显示的传送点数量
-        private TextFieldWidget searchField; // 新增：搜索框
+        private int scrollOffset = 0;
+        private static final int ITEMS_PER_PAGE = 5;
+        private TextFieldWidget searchField;
 
         protected TeleportPointsScreen() {
             super(Text.of("传送点大全"));
             loadTeleportPoints();
-            filteredTeleportPoints.addAll(teleportPoints); // 初始化过滤列表
+            filteredTeleportPoints.addAll(teleportPoints);
         }
 
         @Override
         protected void init() {
             // 添加返回按钮
             ButtonWidget backButton = ButtonWidget.builder(Text.of("← 返回"), button -> {
-                if (this.client != null) {
-                    this.client.setScreen(AutoMessageScreen.this);
+                this.close();
+                if (this.client != null) { // 增加null检查
+                    this.client.setScreen(AutoMessageScreen.this); // 返回上一级菜单
                 }
             }).dimensions(10, 10, 60, 20).build();
             this.addDrawableChild(backButton);
@@ -422,6 +463,12 @@ public class AutoMessageScreen extends Screen {
             } catch (IOException e) {
                 System.out.println("保存传送点失败: " + e.getMessage());
             }
+        }
+
+        @Override
+        public void close() {
+            AutoMessageMod.saveConfig(); // 异步保存配置
+            super.close();
         }
 
         @Override

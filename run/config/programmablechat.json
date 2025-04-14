@@ -1,7 +1,7 @@
 {
-  "message": "",
-  "interval": 0,
-  "coordinate": "",
+  "message": "115",
+  "interval": 6,
+  "coordinate": "2 2 4",
   "isSending": false,
   "isAutoEating": false,
   "isAutoBuilding": false,

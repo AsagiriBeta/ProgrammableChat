@@ -22,6 +22,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 public class AutoMessageMod implements ModInitializer {
     private static String message = "";
@@ -44,6 +48,8 @@ public class AutoMessageMod implements ModInitializer {
     private static String searchText = ""; // 新增：用于存储搜索框的临时字符信息
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = Paths.get("config", "programmablechat.json");
+    private static final ExecutorService saveExecutor = Executors.newSingleThreadExecutor();
+    private static final BlockingQueue<Runnable> saveQueue = new LinkedBlockingQueue<>();
 
     public static String getCoordinate() {
         return coordinate;
@@ -371,13 +377,32 @@ public class AutoMessageMod implements ModInitializer {
         }
     }
 
-    private static void saveConfig() {
-        Config config = new Config(message, interval, coordinate, isSending, isAutoEating, isAutoBuilding, searchText); // 新增：保存搜索框的临时字符信息
-        try (FileWriter writer = new FileWriter(CONFIG_PATH.toFile())) {
-            GSON.toJson(config, writer);
-        } catch (IOException e) {
-            System.out.println("保存配置文件失败: " + e.getMessage());
-        }
+    public static void saveConfig() {
+        saveExecutor.submit(() -> {
+            try {
+                saveQueue.put(() -> {
+                    Config config = new Config(message, interval, coordinate, isSending, isAutoEating, isAutoBuilding, searchText);
+                    try (FileWriter writer = new FileWriter(CONFIG_PATH.toFile())) {
+                        GSON.toJson(config, writer);
+                    } catch (IOException e) {
+                        System.out.println("保存配置文件失败: " + e.getMessage());
+                    }
+                });
+            } catch (InterruptedException e) {
+                System.out.println("保存任务被中断: " + e.getMessage());
+            }
+        });
+
+        saveExecutor.submit(() -> {
+            while (!saveQueue.isEmpty()) {
+                try {
+                    Runnable task = saveQueue.take();
+                    task.run();
+                } catch (InterruptedException e) {
+                    System.out.println("保存任务执行被中断: " + e.getMessage());
+                }
+            }
+        });
     }
 
     private static class Config {

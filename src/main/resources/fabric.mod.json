@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "automessage",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "name": "ProgrammableChat",
   "description": "A mod that allows players to set messages or commands.",
   "authors": [
