@@ -9,7 +9,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.item.Items;
 import net.minecraft.text.Text;
-import net.minecraft.util.math.Vec3d;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import java.io.FileReader;
@@ -29,8 +28,6 @@ public class AutoMessageMod implements ModInitializer {
     private static boolean isSending = false;
     private static boolean isAutoEating = false;
     private static boolean isAutoBuilding = false;
-    private static Vec3d lastPlayerPos = Vec3d.ZERO;
-    private static boolean hasUpdatedPosition = false;
     private static long eatStartTime = 0;
     private static String searchText = ""; // 新增：用于存储搜索框的临时字符信息
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -56,8 +53,6 @@ public class AutoMessageMod implements ModInitializer {
                 return;
             }
 
-            Vec3d currentPos = mc.player.getPos();
-
             if (isSending && interval > 0 && System.currentTimeMillis() - lastSentTime >= interval * 1000L) {
                 if (!message.isEmpty()) {
                     if (message.startsWith("/")) {
@@ -78,32 +73,28 @@ public class AutoMessageMod implements ModInitializer {
                     return;
                 }
 
-                if (!hasUpdatedPosition) {
-                    lastPlayerPos = currentPos;
-                    hasUpdatedPosition = true;
-                }
-                if (!currentPos.equals(lastPlayerPos)) {
-                    if (mc.player != null && mc.player.getHungerManager() != null) { // 增加空值检查
-                        int foodLevel = mc.player.getHungerManager().getFoodLevel();
-                        if (foodLevel <= 10) {
-                            if (eatStartTime == 0) {
-                                for (int i = 0; i < 9; i++) {
-                                    var stack = mc.player.getInventory().getStack(i);
-                                    if (stack.getItem() == Items.COOKED_PORKCHOP) {
-                                        mc.player.getInventory().selectedSlot = i;
-                                        mc.options.useKey.setPressed(true);
-                                        eatStartTime = System.currentTimeMillis();
-                                        break;
-                                    }
+                if (mc.player != null && mc.player.getHungerManager() != null) { // 增加空值检查
+                    int foodLevel = mc.player.getHungerManager().getFoodLevel();
+                    if (foodLevel <= 10) {
+                        if (eatStartTime == 0) {
+                            // 发送 #pause 命令暂停 Baritone 任务
+                            mc.player.networkHandler.sendChatMessage("#pause");
+                            for (int i = 0; i < 9; i++) {
+                                var stack = mc.player.getInventory().getStack(i);
+                                // 支持更多食物类型
+                                if (stack.getItem() == Items.COOKED_PORKCHOP) {
+                                    mc.player.getInventory().selectedSlot = i;
+                                    mc.options.useKey.setPressed(true);
+                                    eatStartTime = System.currentTimeMillis();
+                                    break;
                                 }
-                            } else if (System.currentTimeMillis() - eatStartTime >= 6000) {
-                                mc.options.useKey.setPressed(false);
-                                eatStartTime = 0;
                             }
-                        } else if (foodLevel >= 20) {
-                            mc.options.useKey.setPressed(false);
-                            eatStartTime = 0;
                         }
+                    }
+                    if (eatStartTime != 0 && foodLevel >= 20) {
+                        mc.options.useKey.setPressed(false);
+                        mc.player.networkHandler.sendChatMessage("#resume");
+                        eatStartTime = 0;
                     }
                 }
             }
@@ -160,7 +151,6 @@ public class AutoMessageMod implements ModInitializer {
 
     public static void setAutoEating(boolean autoEating) {
         isAutoEating = autoEating;
-        hasUpdatedPosition = false;
         saveConfig();
     }
 
