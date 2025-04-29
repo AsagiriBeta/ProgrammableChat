@@ -3,7 +3,8 @@
   "interval": 6,
   "coordinate": "2 2 5",
   "isSending": false,
-  "isAutoEating": false,
+  "isAutoEating": true,
   "isAutoBuilding": false,
+  "foodLevelThreshold": 19,
   "searchText": ""
 }

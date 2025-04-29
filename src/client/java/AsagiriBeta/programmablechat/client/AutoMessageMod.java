@@ -7,7 +7,6 @@ import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.item.Items;
 import net.minecraft.text.Text;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -19,6 +18,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import net.minecraft.component.DataComponentTypes;
 
 public class AutoMessageMod implements ModInitializer {
     private static String message = "";
@@ -29,6 +29,7 @@ public class AutoMessageMod implements ModInitializer {
     private static boolean isAutoEating = false;
     private static boolean isAutoBuilding = false;
     private static long eatStartTime = 0;
+    private static int foodLevelThreshold = 10; // 新增：foodLevel 判断阈值
     private static String searchText = ""; // 新增：用于存储搜索框的临时字符信息
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_PATH = Paths.get("config", "programmablechat.json");
@@ -74,23 +75,20 @@ public class AutoMessageMod implements ModInitializer {
                 }
 
                 if (mc.player != null && mc.player.getHungerManager() != null) { // 增加空值检查
-                    int foodLevel = mc.player.getHungerManager().getFoodLevel();
-                    if (foodLevel <= 10) {
+                    int foodLevel = mc.player.getHungerManager().getFoodLevel(); // 将 foodLevel 的声明移到外层作用域
+                    if (foodLevel <= foodLevelThreshold) { // 使用 foodLevelThreshold 作为判断条件
                         if (eatStartTime == 0) {
                             // 发送 #pause 命令暂停 Baritone 任务
                             mc.player.networkHandler.sendChatMessage("#pause");
-                            for (int i = 0; i < 9; i++) {
-                                var stack = mc.player.getInventory().getStack(i);
-                                // 支持更多食物类型
-                                if (stack.getItem() == Items.COOKED_PORKCHOP) {
-                                    mc.player.getInventory().selectedSlot = i;
-                                    mc.options.useKey.setPressed(true);
-                                    eatStartTime = System.currentTimeMillis();
-                                    break;
-                                }
+                            // 使用副手上的食物
+                            var offhandStack = mc.player.getOffHandStack();
+                            if (offhandStack.contains(DataComponentTypes.FOOD)) { // 修改：通过判断是否有FoodComponent属性来判断是否为食物
+                                mc.options.useKey.setPressed(true);
+                                eatStartTime = System.currentTimeMillis();
                             }
                         }
                     }
+                    // 将 if (eatStartTime != 0 && foodLevel >= 20) 的判断逻辑放在这里，确保 foodLevel 在作用域内
                     if (eatStartTime != 0 && foodLevel >= 20) {
                         mc.options.useKey.setPressed(false);
                         mc.player.networkHandler.sendChatMessage("#resume");
@@ -195,6 +193,15 @@ public class AutoMessageMod implements ModInitializer {
         saveConfig();
     }
 
+    public static int getFoodLevelThreshold() {
+        return foodLevelThreshold;
+    }
+
+    public static void setFoodLevelThreshold(int threshold) {
+        foodLevelThreshold = threshold;
+        saveConfig();
+    }
+
     private static void loadConfig() {
         if (Files.exists(CONFIG_PATH)) {
             try (FileReader reader = new FileReader(CONFIG_PATH.toFile())) {
@@ -205,6 +212,7 @@ public class AutoMessageMod implements ModInitializer {
                 isSending = config.isSending;
                 isAutoEating = config.isAutoEating;
                 isAutoBuilding = config.isAutoBuilding;
+                foodLevelThreshold = config.foodLevelThreshold; // 新增：加载 foodLevel 判断阈值
                 searchText = config.searchText; // 新增：加载搜索框的临时字符信息
             } catch (IOException e) {
                 System.out.println("加载配置文件失败: " + e.getMessage());
@@ -214,7 +222,7 @@ public class AutoMessageMod implements ModInitializer {
 
     public static void saveConfig() {
         saveExecutor.execute(() -> {
-            Config config = new Config(message, interval, coordinate, isSending, isAutoEating, isAutoBuilding, searchText);
+            Config config = new Config(message, interval, coordinate, isSending, isAutoEating, isAutoBuilding, foodLevelThreshold, searchText);
             try (FileWriter writer = new FileWriter(CONFIG_PATH.toFile())) {
                 GSON.toJson(config, writer);
             } catch (IOException e) {
@@ -230,15 +238,17 @@ public class AutoMessageMod implements ModInitializer {
         boolean isSending;
         boolean isAutoEating;
         boolean isAutoBuilding;
+        int foodLevelThreshold; // 新增：用于存储 foodLevel 判断阈值
         String searchText; // 新增：用于存储搜索框的临时字符信息
 
-        Config(String message, int interval, String coordinate, boolean isSending, boolean isAutoEating, boolean isAutoBuilding, String searchText) {
+        Config(String message, int interval, String coordinate, boolean isSending, boolean isAutoEating, boolean isAutoBuilding, int foodLevelThreshold, String searchText) {
             this.message = message;
             this.interval = interval;
             this.coordinate = coordinate;
             this.isSending = isSending;
             this.isAutoEating = isAutoEating;
             this.isAutoBuilding = isAutoBuilding;
+            this.foodLevelThreshold = foodLevelThreshold; // 新增：初始化 foodLevel 判断阈值
             this.searchText = searchText; // 新增：初始化搜索框的临时字符信息
         }
     }

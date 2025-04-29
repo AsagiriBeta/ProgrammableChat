@@ -52,17 +52,13 @@ public class AutoMessageScreen extends Screen {
         }).dimensions(startX + buttonWidth + gap, startY, buttonWidth, buttonHeight).build();
         this.addDrawableChild(autoBuildSettingsButton);
 
-        // 添加自动进食按钮
-        ButtonWidget autoEatButton = ButtonWidget.builder(Text.of(AutoMessageMod.isAutoEating() ? "自动进食已打开" : "打开自动进食"), button -> {
-            if (AutoMessageMod.isAutoEating()) {
-                AutoMessageMod.setAutoEating(false);
-                button.setMessage(Text.of("打开自动进食"));
-            } else {
-                AutoMessageMod.setAutoEating(true);
-                button.setMessage(Text.of("自动进食已打开"));
+        // 添加自动进食设置按钮
+        ButtonWidget autoEatSettingsButton = ButtonWidget.builder(Text.of("自动进食设置"), button -> {
+            if (this.client != null) {
+                this.client.setScreen(new AutoEatSettingsScreen());
             }
         }).dimensions(startX, startY + buttonHeight + gap, buttonWidth, buttonHeight).build();
-        this.addDrawableChild(autoEatButton);
+        this.addDrawableChild(autoEatSettingsButton);
 
         // 添加传送点大全按钮
         ButtonWidget teleportPointsButton = ButtonWidget.builder(Text.of("传送点大全"), button -> {
@@ -302,6 +298,80 @@ public class AutoMessageScreen extends Screen {
         public boolean charTyped(char chr, int modifiers) {
             return this.coordinateField.charTyped(chr, modifiers) || 
                    super.charTyped(chr, modifiers);
+        }
+    }
+
+    private static class AutoEatSettingsScreen extends Screen {
+        private TextFieldWidget foodLevelThresholdField;
+
+        protected AutoEatSettingsScreen() {
+            super(Text.of("自动进食设置"));
+        }
+
+        @Override
+        protected void init() {
+            // 添加返回按钮
+            ButtonWidget backButton = ButtonWidget.builder(Text.of("← 返回"), button -> {
+                if (this.client != null) {
+                    this.client.setScreen(new AutoMessageScreen());
+                }
+            }).dimensions(10, 10, 60, 20).build();
+            this.addDrawableChild(backButton);
+
+            // 添加自动进食按钮
+            ButtonWidget autoEatButton = ButtonWidget.builder(Text.of(AutoMessageMod.isAutoEating() ? "自动进食已打开" : "打开自动进食"), button -> {
+                if (AutoMessageMod.isAutoEating()) {
+                    AutoMessageMod.setAutoEating(false);
+                    button.setMessage(Text.of("打开自动进食"));
+                } else {
+                    AutoMessageMod.setAutoEating(true);
+                    button.setMessage(Text.of("自动进食已打开"));
+                }
+            }).dimensions(this.width / 2 - 100, this.height / 2 - 20, 200, 20).build();
+            this.addDrawableChild(autoEatButton);
+
+            // 初始化 foodLevel 阈值输入框
+            foodLevelThresholdField = createFoodLevelThresholdField();
+            this.addSelectableChild(foodLevelThresholdField);
+
+            // 设置默认焦点
+            this.setInitialFocus(foodLevelThresholdField);
+        }
+
+        // 新增：提取 foodLevel 阈值输入框的初始化逻辑
+        private TextFieldWidget createFoodLevelThresholdField() {
+            TextFieldWidget foodLevelThresholdField = new TextFieldWidget(this.textRenderer, this.width / 2 - 100, this.height / 2 + 10, 200, 20, Text.of("Food Level 阈值："));
+            foodLevelThresholdField.setMaxLength(2); // 限制输入长度为2，因为阈值范围是0-20
+            foodLevelThresholdField.setText(String.valueOf(AutoMessageMod.getFoodLevelThreshold())); // 设置初始值为当前阈值
+            foodLevelThresholdField.setChangedListener(text -> {
+                try {
+                    int threshold = Integer.parseInt(text);
+                    if (threshold >= 0 && threshold <= 20) {
+                        AutoMessageMod.setFoodLevelThreshold(threshold);
+                        AutoMessageMod.saveConfig(); // 确保输入值能正常存入 JSON
+                    }
+                } catch (NumberFormatException e) {
+                    // 忽略非数字输入
+                }
+            });
+            return foodLevelThresholdField;
+        }
+
+        @Override
+        public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+            this.renderBackground(context, mouseX, mouseY, delta);
+            super.render(context, mouseX, mouseY, delta);
+
+            // 绘制输入框的提示文本
+            context.drawTextWithShadow(this.textRenderer, Text.of("Food Level 阈值："), this.width / 2 - 100, this.height / 2, 0xFFFFFF);
+
+            // 渲染输入框
+            foodLevelThresholdField.render(context, mouseX, mouseY, delta);
+        }
+
+        @Override
+        public void close() {
+            super.close();
         }
     }
 
